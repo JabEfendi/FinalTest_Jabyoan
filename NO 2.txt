@@ -1,0 +1,109 @@
+-- NO 2
+-- 2.1
+-- Dim_user
+CREATE TABLE dim_user (
+	user_id INT primary key not null,
+	user_name VARCHAR(100),
+	country VARCHAR(50)
+);
+
+-- Dim_post
+CREATE TABLE dim_post (
+	post_id INT primary key not null,
+    post_text VARCHAR(500),
+	post_date DATE,
+	user_id INT
+);
+
+-- Dim_date
+CREATE TABLE dim_date (
+	date_id SERIAL primary key not null,
+	post_date DATE
+);
+
+
+
+
+-- 2.2
+-- Insert Dim_user
+INSERT INTO dim_user (user_id, user_name, country)
+SELECT user_id, user_name, country
+FROM raw_users;
+
+-- Insert Dim_post
+-- Insert data into dim_post from raw_posts
+INSERT INTO dim_post (post_id, post_text, post_date, user_id)
+SELECT post_id, post_text, post_date, user_id
+FROM raw_posts;
+
+-- Insert Dim_date
+-- Insert data into dim_date from distinct post dates in raw_posts
+INSERT INTO dim_date (post_date)
+SELECT post_date
+FROM raw_posts;
+
+
+-- 2.3
+CREATE TABLE fact_post_performance (
+    fp_id SERIAL PRIMARY KEY,
+    post_id INT,
+    date_id INT,
+    views INT,
+    likes INT
+);
+ALTER TABLE fact_post_performance
+ADD CONSTRAINT fk_post FOREIGN KEY (post_id) REFERENCES dim_post(post_id),
+ADD CONSTRAINT fk_date FOREIGN KEY (date_id) REFERENCES dim_date(date_id);
+
+
+
+-- 2.4
+-- Insert select * from fact_post_performance
+INSERT INTO fact_post_performance (post_id, date_id, views, likes)
+SELECT p.post_id, d.date_id, COUNT(DISTINCT L.user_id) AS views, COUNT(DISTINCT l.like_id) AS likes
+FROM
+    raw_posts p
+JOIN
+    dim_date d
+ON
+    p.post_date = d.post_date
+LEFT JOIN
+    raw_likes l
+ON
+    p.post_id = l.post_id
+GROUP BY
+    p.post_id, d.date_id;
+
+
+
+
+-- 2.5
+CREATE TABLE fact_daily_posts (
+    fact_id SERIAL PRIMARY KEY,
+    user_id INT,
+    date_id INT,
+    post_count INT
+);
+ALTER TABLE fact_daily_posts
+ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES dim_user(user_id),
+ADD CONSTRAINT fk_date FOREIGN KEY (date_id) REFERENCES dim_date(date_id);
+
+
+
+-- 2.6
+-- Insert fact_daily_posts
+INSERT INTO fact_daily_posts (user_id, date_id, post_count)
+SELECT u.user_id, d.date_id, COUNT(p.post_id) AS post_count
+FROM
+    dim_user u
+JOIN
+    dim_date d
+ON
+    d.date_id = u.date_id
+LEFT JOIN
+    raw_posts p
+ON
+    p.user_id = u.user_id
+    AND p.post_date = d.date_id
+GROUP BY
+    u.user_id, d.date_id;
